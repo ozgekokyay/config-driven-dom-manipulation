@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Manager</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            line-height: 1.6;
+        }
+        .config-form { 
+            background: #f5f5f5; 
+            padding: 20px; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+        }
+        textarea { 
+            width: 100%; 
+            height: 200px; 
+            font-family: monospace; 
+            margin-bottom: 10px;
+        }
+        button { 
+            background: #4CAF50; 
+            color: white; 
+            border: none; 
+            padding: 10px 15px; 
+            cursor: pointer; 
+            margin-right: 10px;
+            border-radius: 4px;
+        }
+        button.danger {
+            background: #f44336;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .format-selector { 
+            margin: 10px 0; 
+        }
+        .format-selector label { 
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        .config-item { 
+            background: white; 
+            padding: 15px; 
+            margin: 15px 0; 
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        pre { 
+            background: #eee; 
+            padding: 10px; 
+            border-radius: 3px; 
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .config-actions {
+            margin-top: 10px;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background: #f2dede;
+            color: #a94442;
+        }
+    </style>
+</head>
+<body>
+    <h1>Configuration Manager</h1>
+    
+    <div class="config-form">
+        <h2>Create New Configuration</h2>
+        <div class="format-selector">
+            <label>
+                <input type="radio" name="format" value="json" checked> JSON
+            </label>
+            <label>
+                <input type="radio" name="format" value="yaml"> YAML
+            </label>
+        </div>
+        <textarea id="configInput" placeholder='{
+  "pages": {
+    "home": ["header-config"]
+  },
+  "urls": {
+    "/products": ["product-config"]
+  },
+  "actions": [
+    {
+      "type": "remove",
+      "selector": ".ad-banner"
+    }
+  ]
+}'></textarea>
+        <button id="saveConfig">Save Configuration</button>
+        <div id="statusMessage" class="status-message" style="display: none;"></div>
+    </div>
+
+    <div id="configList">
+        <h2>Existing Configurations</h2>
+        <div id="loadingMessage">Loading configurations...</div>
+        <!-- Configurations will appear here -->
+    </div>
+
+    <!-- Include YAML parser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script type="module">
+        import ConfigLibrary from './configLibrary.js';
+
+        // DOM Elements
+        const configInput = document.getElementById('configInput');
+        const saveBtn = document.getElementById('saveConfig');
+        const configList = document.getElementById('configList');
+        const formatRadios = document.querySelectorAll('input[name="format"]');
+        const statusMessage = document.getElementById('statusMessage');
+        const loadingMessage = document.getElementById('loadingMessage');
+
+        // Initialize library
+        const lib = new ConfigLibrary('http://localhost:8080/api');
+
+        // Update textarea placeholder based on selected format
+        formatRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.value === 'yaml') {
+                    configInput.placeholder = `pages:
+  home:
+    - header-config
+urls:
+  /products:
+    - product-config
+actions:
+  - type: remove
+    selector: .ad-banner`;
+                } else {
+                    configInput.placeholder = `{
+  "pages": {
+    "home": ["header-config"]
+  },
+  "urls": {
+    "/products": ["product-config"]
+  },
+  "actions": [
+    {
+      "type": "remove",
+      "selector": ".ad-banner"
+    }
+  ]
+}`;
+                }
+            });
+        });
+
+        // Show status message
+        function showStatus(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${isError ? 'error' : 'success'}`;
+            statusMessage.style.display = 'block';
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        // Refresh configurations list
+        async function refreshConfigs() {
+            try {
+                loadingMessage.style.display = 'block';
+                const configs = await lib.getAllSpecificConfigs();
+                
+                if (configs && configs.length) {
+                    configList.innerHTML = configs.map(c => `
+                        <div class="config-item">
+                            <h3>Config ID: ${c.id}</h3>
+                            <pre>${escapeHTML(JSON.stringify(c, null, 2))}</pre>
+                            <div class="config-actions">
+                                <button onclick="applyConfig('${c.id}')">Apply</button>
+                                <button onclick="updateConfigPrompt('${c.id}')">Update</button>
+                                <button class="danger" onclick="deleteConfig('${c.id}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    configList.innerHTML = '<p>No configurations found</p>';
+                }
+            } catch (e) {
+                console.error('Failed to fetch configurations:', e);
+                configList.innerHTML = `
+                    <div class="error">
+                        Error loading configurations: ${escapeHTML(e.message)}
+                    </div>
+                `;
+            } finally {
+                loadingMessage.style.display = 'none';
+            }
+        }
+
+        // Save configuration
+        saveBtn.addEventListener('click', async () => {
+            try {
+                const input = configInput.value.trim();
+                if (!input) {
+                    showStatus('Please enter configuration data', true);
+                    return;
+                }
+
+                const selectedFormat = document.querySelector('input[name="format"]:checked').value;
+                let configId;
+                
+                if (selectedFormat === 'json') {
+                    configId = await lib.createSpecificConfig(JSON.parse(input));
+                } else {
+                    configId = await lib.createSpecificConfigFromYaml(input);
+                }
+                
+                showStatus(`Configuration saved successfully with ID: ${configId}`);
+                configInput.value = '';
+                await refreshConfigs();
+            } catch (e) {
+                console.error('Save error:', e);
+                showStatus(`Error saving configuration: ${e.message}`, true);
+            }
+        });
+
+        // HTML escaping for safety
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.toString().replace(/[&<>"']/g, (match) => {
+                const escapeMap = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                };
+                return escapeMap[match];
+            });
+        }
+
+        // Global functions for button actions
+        window.applyConfig = async function(id) {
+            try {
+                await lib.applyConfig(id);
+                showStatus(`Configuration ${id} applied successfully!`);
+            } catch (e) {
+                showStatus(`Error applying configuration: ${e.message}`, true);
+            }
+        };
+
+        window.updateConfigPrompt = function(id) {
+            const newConfig = prompt('Enter updated configuration (JSON format):');
+            if (newConfig) {
+                updateConfig(id, newConfig);
+            }
+        };
+
+        window.updateConfig = async function(id, config) {
+            try {
+                const configObj = JSON.parse(config);
+                await lib.updateSpecificConfig(id, configObj);
+                showStatus(`Configuration ${id} updated successfully!`);
+                await refreshConfigs();
+            } catch (e) {
+                showStatus(`Error updating configuration: ${e.message}`, true);
+            }
+        };
+
+        window.deleteConfig = async function(id) {
+            if (confirm('Are you sure you want to delete this configuration?')) {
+                try {
+                    await lib.deleteSpecificConfig(id);
+                    showStatus('Configuration deleted successfully!');
+                    await refreshConfigs();
+                } catch (e) {
+                    showStatus(`Error deleting configuration: ${e.message}`, true);
+                }
+            }
+        };
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshConfigs();
+            
+            // Apply any configuration based on current page context
+            lib.applyConfig({
+                host: window.location.hostname,
+                url: window.location.pathname,
+                page: 'home' // Default page context
+            }).catch(e => console.error('Error applying initial config:', e));
+        });
+    </script>
+</body>
+</html>
