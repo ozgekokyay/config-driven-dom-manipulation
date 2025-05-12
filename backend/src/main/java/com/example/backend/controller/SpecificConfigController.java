@@ -10,14 +10,18 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.yaml.snakeyaml.Yaml;
 
 @RestController
 @RequestMapping("/api/specific")
 @RequiredArgsConstructor
 public class SpecificConfigController {
     private final Map<String, SpecificConfig> configStore = new ConcurrentHashMap<>();
-    
+    private final Yaml yaml = new Yaml();
+
     @GetMapping
     public SpecificConfig getByContext(
             @RequestParam(required = false) String host,
@@ -32,7 +36,7 @@ public class SpecificConfigController {
     
     @GetMapping("/{id}")
     public SpecificConfig getById(@PathVariable String id) {
-        return configStore.get(id);
+        return findConfigOrThrow(id);       
     }
 
     @GetMapping("/all")
@@ -47,7 +51,20 @@ public class SpecificConfigController {
         configStore.put(id, config);
         return id;
     }
+    
+    @GetMapping("/yaml/{id}")
+    public String getByIdYaml(@PathVariable String id) {
+        SpecificConfig config = findConfigOrThrow(id);
+        return yaml.dumpAsMap(config);
+    }
 
+    @PostMapping(consumes = "application/x-yaml")
+    public String createFromYaml(@RequestBody String yamlContent) {
+        SpecificConfig config = yaml.loadAs(yamlContent, SpecificConfig.class);
+        config.setId(UUID.randomUUID().toString());
+        configStore.put(config.getId(), config);
+        return config.getId();
+    }
     
     private boolean matchesContext(SpecificConfig config, String host, String url, String page) {
         boolean matches = false;
@@ -65,5 +82,13 @@ public class SpecificConfigController {
         }
         
         return matches;
+    }
+
+    private SpecificConfig findConfigOrThrow(String id) {
+        SpecificConfig config = configStore.get(id);
+        if (config == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Config not found");
+        }
+        return config;
     }
 }
