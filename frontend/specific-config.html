@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Specific Configurations</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .status-message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .status-message.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .format-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .tab {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .tab.active {
+            background: #4CAF50;
+            color: white;
+        }
+        #saveConfig:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Specific Configurations</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="/specific-config.html" class="active">Specific</a>
+            <a href="/action-config.html">Action</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="config-form">
+            <h2>Create Specific Configuration</h2>
+            <div class="format-tabs">
+                <button class="tab active" data-format="json">JSON</button>
+                <button class="tab" data-format="yaml">YAML</button>
+            </div>
+            <textarea id="configInput" placeholder='{
+  "pages": {
+    "home": ["header-config"]
+  },
+  "urls": {
+    "/products": ["product-config"]
+  },
+  "actions": [
+    {
+      "type": "remove",
+      "selector": ".ad-banner"
+    }
+  ]
+}'></textarea>
+            <button id="saveConfig">Save Configuration</button>
+            <div id="statusMessage" class="status-message"></div>
+        </div>
+
+        <div id="configList">
+            <h2>Existing Configurations</h2>
+            <div id="loadingMessage">Loading configurations...</div>
+        </div>
+
+        <div id="heyMessage" style="margin: 20px 0;"></div>
+        <button id="sendHeyButton">Send Hey Message</button>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script type="module">
+        import ConfigLibrary from './js/config-library.js';
+        const configLib = new ConfigLibrary('http://localhost:8080/api');
+
+        // DOM elements
+        const configList = document.getElementById('configList');
+        const statusMessage = document.getElementById('statusMessage');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const configInput = document.getElementById('configInput');
+        const saveBtn = document.getElementById('saveConfig');
+        const formatTabs = document.querySelectorAll('.format-tabs .tab');
+        const sendHeyButton = document.getElementById('sendHeyButton');
+        const heyMessage = document.getElementById('heyMessage');
+
+        // Placeholder texts
+        const placeholders = {
+            json: `{
+  "pages": {
+    "home": ["header-config"]
+  },
+  "urls": {
+    "/products": ["product-config"]
+  },
+  "actions": [
+    {
+      "type": "remove",
+      "selector": ".ad-banner"
+    }
+  ]
+}`,
+            yaml: `pages:
+  home: ["header-config"]
+urls:
+  /products: ["product-config"]
+hosts:
+  example.com: ["host-config"]
+`
+        };
+
+        let currentFormat = 'json';
+        configInput.placeholder = placeholders.json;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshConfigs();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            formatTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    formatTabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentFormat = tab.dataset.format;
+                    configInput.placeholder = placeholders[currentFormat];
+                    
+                    
+                });
+            });
+
+            saveBtn.addEventListener('click', saveConfig);
+
+        }
+
+        async function saveConfig() {
+            const input = configInput.value.trim();
+            
+            if (!input) {
+                showStatus('Please enter configuration data', true);
+                return;
+            }
+
+            try {
+                saveBtn.disabled = true;
+                showStatus('Saving configuration...', false);
+
+                let configId;
+                
+                if (currentFormat === 'yaml') {
+                    try {
+                        jsyaml.load(input);
+                    } catch (e) {
+                        throw new Error(`Invalid YAML: ${e.message}`);
+                    }
+                    configId = await configLib.createSpecificConfigFromYaml(input);
+                } else {
+                    try {
+                        const data = JSON.parse(input);
+                        configId = await configLib.createSpecificConfig(data);
+                    } catch (e) {
+                        let errorMsg = `Invalid JSON: ${e.message}`;
+                        if (e.message.includes('Unexpected token')) {
+                            const lineNum = input.substring(0, e.pos).split('\n').length;
+                            errorMsg += ` (near line ${lineNum})`;
+                        }
+                        throw new Error(errorMsg);
+                    }
+                }
+
+                showStatus(`Configuration saved successfully with ID: ${configId}`);
+                configInput.value = '';
+                await refreshConfigs();
+
+            } catch (e) {
+                console.error('Save error:', e);
+                showStatus(`Error: ${e.message}`, true);
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        async function refreshConfigs() {
+            try {
+                loadingMessage.style.display = 'block';
+                const configs = await configLib.getAllSpecificConfigs();
+                
+                if (configs && configs.length) {
+                    configList.innerHTML = configs.map(c => `
+                        <div class="config-item">
+                            <h3>Config ID: ${c.id}</h3>
+                            <pre>${escapeHTML(JSON.stringify(c, null, 2))}</pre>
+                            <div class="config-actions">
+                                <button onclick="applyConfig('${c.id}')">Apply</button>
+                                <button onclick="updateConfigPrompt('${c.id}')">Update</button>
+                                <button class="danger" onclick="deleteConfig('${c.id}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    configList.innerHTML = '<p>No configurations found</p>';
+                }
+            } catch (e) {
+                console.error('Failed to fetch configurations:', e);
+                configList.innerHTML = `
+                    <div class="error">
+                        Error loading configurations: ${escapeHTML(e.message)}
+                    </div>
+                `;
+            } finally {
+                loadingMessage.style.display = 'none';
+            }
+        }
+
+        function showStatus(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${isError ? 'error' : 'success'}`;
+            statusMessage.style.display = 'block';
+            setTimeout(() => {
+                if (statusMessage.textContent === message) {
+                    statusMessage.style.display = 'none';
+                }
+            }, 5000);
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.toString().replace(/[&<>"']/g, (match) => {
+                const escapeMap = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                };
+                return escapeMap[match];
+            });
+        }
+
+        window.applyConfig = async (id) => {
+            try {
+                await configLib.applyConfig(id);
+                showStatus(`Configuration ${id} applied successfully`);
+            } catch (e) {
+                showStatus(`Error applying configuration: ${e.message}`, true);
+            }
+        };
+
+        window.updateConfigPrompt = (id) => {
+            console.log(`Update config with id: ${id}`);
+        };
+
+        window.deleteConfig = async (id) => {
+            if (confirm(`Are you sure you want to delete configuration ${id}?`)) {
+                try {
+                    await configLib.deleteSpecificConfig(id);
+                    showStatus(`Configuration ${id} deleted successfully`);
+                    await refreshConfigs();
+                } catch (e) {
+                    showStatus(`Error deleting configuration: ${e.message}`, true);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
