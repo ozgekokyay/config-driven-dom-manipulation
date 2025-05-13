@@ -82,8 +82,6 @@
             <div id="loadingMessage">Loading configurations...</div>
         </div>
 
-        <div id="heyMessage" style="margin: 20px 0;"></div>
-        <button id="sendHeyButton">Send Hey Message</button>
     </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
@@ -98,10 +96,7 @@
         const configInput = document.getElementById('configInput');
         const saveBtn = document.getElementById('saveConfig');
         const formatTabs = document.querySelectorAll('.format-tabs .tab');
-        const sendHeyButton = document.getElementById('sendHeyButton');
-        const heyMessage = document.getElementById('heyMessage');
 
-        // Placeholder texts
         const placeholders = {
             json: `{
   "pages": {
