@@ -87,7 +87,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script type="module">
         import ConfigLibrary from './js/config-library.js';
-        const configLib = new ConfigLibrary('http://localhost:8080/api');
+        const configLib = new ConfigLibrary('http://localhost:8080/api/specific');
 
         // DOM elements
         const configList = document.getElementById('configList');
@@ -105,10 +105,10 @@
   "urls": {
     "/products": ["product-config"]
   },
-  "actions": [
+  "hosts": [
     {
-      "type": "remove",
-      "selector": ".ad-banner"
+    "example.com": ["id"],
+    "another.com": ["id"]
     }
   ]
 }`,
@@ -165,11 +165,11 @@ hosts:
                     } catch (e) {
                         throw new Error(`Invalid YAML: ${e.message}`);
                     }
-                    configId = await configLib.createSpecificConfigFromYaml(input);
+                    configId = await configLib.createConfigFromYaml(input);
                 } else {
                     try {
                         const data = JSON.parse(input);
-                        configId = await configLib.createSpecificConfig(data);
+                        configId = await configLib.createConfig(data);
                     } catch (e) {
                         let errorMsg = `Invalid JSON: ${e.message}`;
                         if (e.message.includes('Unexpected token')) {
@@ -195,7 +195,7 @@ hosts:
         async function refreshConfigs() {
             try {
                 loadingMessage.style.display = 'block';
-                const configs = await configLib.getAllSpecificConfigs();
+                const configs = await configLib.getAllConfigs();
                 
                 if (configs && configs.length) {
                     configList.innerHTML = configs.map(c => `
@@ -203,7 +203,6 @@ hosts:
                             <h3>Config ID: ${c.id}</h3>
                             <pre>${escapeHTML(JSON.stringify(c, null, 2))}</pre>
                             <div class="config-actions">
-                                <button onclick="applyConfig('${c.id}')">Apply</button>
                                 <button onclick="updateConfigPrompt('${c.id}')">Update</button>
                                 <button class="danger" onclick="deleteConfig('${c.id}')">Delete</button>
                             </div>
@@ -265,7 +264,7 @@ hosts:
         window.deleteConfig = async (id) => {
             if (confirm(`Are you sure you want to delete configuration ${id}?`)) {
                 try {
-                    await configLib.deleteSpecificConfig(id);
+                    await configLib.deleteConfig(id);
                     showStatus(`Configuration ${id} deleted successfully`);
                     await refreshConfigs();
                 } catch (e) {
