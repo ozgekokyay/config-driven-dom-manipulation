@@ -49,14 +49,42 @@ export default class ConfigLibrary {
     }
 
     // ----------- Specific Config Endpoints --------------
-    async getSpecificConfigByContext({ host, url, page }) {
-        const params = new URLSearchParams();
-        if (host) params.append('host', host);
-        if (url) params.append('url', url);
-        if (page) params.append('page', page);
+    // async getSpecificConfigByContext({ host, url, page }) {
+    //     const params = new URLSearchParams();
+    //     if (host) params.append('host', host);
+    //     if (url) params.append('url', url);
+    //     if (page) params.append('page', page);
         
-        const response = await fetch(`${this.specificUrl}/?${params}`);
-        return this._handleResponse(response);
+    //     const response = await fetch(`${this.specificUrl}/?${params}`);
+    //     return this._handleResponse(response);
+    // }
+
+    async getSpecificConfigByContext({ host, url, page }) {
+        try {
+            const params = new URLSearchParams();
+            if (host) params.append('host', host);
+            if (url) params.append('url', url);
+            if (page) params.append('page', page);
+            
+            const response = await fetch(`${this.baseUrl}/specific?${params}`);
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch specific config: ${response.status}`);
+            }
+            
+            const specificConfig = await response.json();
+            
+            // If no matching config found, return null
+            if (!specificConfig || Object.keys(specificConfig).length === 0) {
+                return null;
+            }
+            
+            return specificConfig;
+            
+        } catch (error) {
+            console.error('Error fetching specific config:', error);
+            throw error;
+        }
     }
 
 

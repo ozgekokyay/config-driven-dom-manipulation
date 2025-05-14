@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Manipulation Debugger</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .demo-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 300px;
+        }
+        .controls {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .debug-console {
+            background: #333;
+            color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .debug-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 5px;
+        }
+        .debug-error {
+            color: #ff6b6b;
+        }
+        .debug-success {
+            color: #6bff6b;
+        }
+        .debug-warning {
+            color: #ffcc6b;
+        }
+        #ad-banner {
+            background: #fce5e5;
+            padding: 10px;
+            text-align: center;
+            margin: 10px 0;
+        }
+        #old-header {
+            background: #baefc6;
+            padding: 10px;
+        }
+        .config-preview {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>DOM Manipulation Debugger</h1>
+        <nav>
+            <a href="index.html" >Home</a>
+            <a href="/specific-config.html">Specific</a>
+            <a href="/action-config.html">Action</a>
+            <a href="/demo-page.html"  class="active">Demo</a>
+        </nav>
+    </header>
+    
+    <div class="controls">
+        <h2>Configuration Selector</h2>
+        <div>
+            <label for="host">Host:</label>
+            <input type="text" id="host" placeholder="example.com" value="example.com">
+            
+            <label for="url">URL:</label>
+            <input type="text" id="url" placeholder="/products" value="/products">
+            
+            <label for="page">Page:</label>
+            <input type="text" id="page" placeholder="Card" value="Card">
+
+            <button id="fetchConfig">Fetch Config</button>
+            <button id="applyConfig" disabled>Apply Config</button>
+            <button id="clearLogs">Clear Logs</button>
+        </div>
+        
+        <div id="configPreview" class="config-preview" style="display: none;">
+            <h3>Config Preview</h3>
+            <div id="configActions"></div>
+        </div>
+    </div>
+
+    <div class="debug-console" id="debugConsole">
+        Ready for debugging...
+    </div>
+    
+    <div class="demo-area">
+        <h2>Demo Content Area</h2>
+        <div id="ad-banner" class="ad-banner">
+            This is an advertisement banner (will be removed by config)
+        </div>
+        
+        <div id="old-header">
+            Old Header Content (will be replaced)
+        </div>
+        
+        <div class="content">
+            <p>This page contains "Machine Learning" text (will be altered to "AI")</p>
+        </div>
+    </div>
+
+    <script type="module">
+        class ConfigLibrary {
+            constructor(baseUrl = 'http://localhost:8080/api') {
+                this.baseUrl = baseUrl;
+                this.debugLog('ConfigLibrary initialized', { baseUrl });
+            }
+
+            async getConfig(id) {
+                this.debugLog(`Fetching action config: ${id}`);
+                try {
+                    const response = await fetch(`${this.baseUrl}/configuration/${id}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    this.debugLog(`Received config ${id}`, data);
+                    return data;
+                } catch (error) {
+                    this.debugLog(`Error fetching config ${id}`, error, 'error');
+                    throw error;
+                }
+            }
+
+            async getSpecificConfigByContext({ host, url, page }) {
+                const params = new URLSearchParams();
+                if (host) params.append('host', host);
+                if (url) params.append('url', url);
+                if (page) params.append('page', page);
+
+                const endpoint = `${this.baseUrl}/specific?${params}`;
+                this.debugLog('Fetching specific config', {
+                    endpoint,
+                    params: { host, url, page }
+                });
+
+                try {
+                    const response = await fetch(endpoint);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    this.debugLog('Received specific config', data);
+                    return data;
+                } catch (error) {
+                    this.debugLog('Error fetching specific config', error, 'error');
+                    throw error;
+                }
+            }
+
+            debugLog(message, data = null, type = 'info') {
+                const consoleElem = document.getElementById('debugConsole');
+                const entry = document.createElement('div');
+                entry.className = `debug-entry debug-${type}`;
+                
+                const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+                let logText = `[${timestamp}] ${message}`;
+                
+                if (data) {
+                    if (data instanceof Error) {
+                        logText += `\nERROR: ${data.message}`;
+                        if (data.stack) {
+                            logText += `\nStack: ${data.stack.split('\n')[1].trim()}`;
+                        }
+                    } else {
+                        logText += `\n${JSON.stringify(data, null, 2)}`;
+                    }
+                }
+                
+                entry.textContent = logText;
+                consoleElem.prepend(entry);
+                
+                if (consoleElem.children.length > 100) {
+                    consoleElem.removeChild(consoleElem.lastChild);
+                }
+                
+                if (type === 'error') {
+                    console.error(message, data);
+                } else {
+                    console.log(message, data);
+                }
+            }
+        }
+
+        const configLib = new ConfigLibrary('http://localhost:8080/api');
+        let currentConfig = null;
+        
+        // DOM Elements
+        const hostInput = document.getElementById('host');
+        const urlInput = document.getElementById('url');
+        const pageSelect = document.getElementById('page');
+        const fetchBtn = document.getElementById('fetchConfig');
+        const applyBtn = document.getElementById('applyConfig');
+        const clearLogsBtn = document.getElementById('clearLogs');
+        const configPreview = document.getElementById('configPreview');
+        const configActions = document.getElementById('configActions');
+
+        fetchBtn.addEventListener('click', fetchConfig);
+        applyBtn.addEventListener('click', applyConfig);
+        clearLogsBtn.addEventListener('click', () => {
+            document.getElementById('debugConsole').innerHTML = 'Logs cleared...';
+        });
+
+        async function fetchConfig() {
+            const context = {
+                host: hostInput.value.trim(),
+                url: urlInput.value.trim(),
+                page: pageSelect.value
+            };
+            
+            configLib.debugLog('Starting config fetch', context);
+
+            try {
+                const specificConfig = await configLib.getSpecificConfigByContext(context);
+                configLib.debugLog('Specific config received', specificConfig);
+
+                if (!specificConfig || Object.keys(specificConfig).length === 0) {
+                    throw new Error('No specific configuration found for this context');
+                }
+
+                const configIds = [];
+                
+                const processConfigMap = (configMap, mapType) => {
+                    if (!configMap) return;
+                    
+                    for (const [key, ids] of Object.entries(configMap)) {
+                        if (!Array.isArray(ids)) {
+                            configLib.debugLog(`Invalid ${mapType} config format for ${key} - expected array`, ids, 'warning');
+                            continue;
+                        }
+                        
+                        ids.forEach(id => {
+                            if (typeof id === 'string' && id.trim().length >= 10) { // Basic ID validation
+                                configIds.push(id.trim());
+                            } else {
+                                configLib.debugLog(`Skipping invalid config ID in ${mapType}.${key}: ${id}`, null, 'warning');
+                            }
+                        });
+                    }
+                };
+
+                processConfigMap(specificConfig.pages, 'pages');
+                processConfigMap(specificConfig.urls, 'urls');
+                processConfigMap(specificConfig.hosts, 'hosts');
+
+                configLib.debugLog('Validated config IDs', configIds);
+
+                if (configIds.length === 0) {
+                    throw new Error('No valid config references found in specific configuration');
+                }
+
+                const uniqueConfigIds = [...new Set(configIds)];
+                const actions = [];
+                
+                configLib.debugLog('Processing action configs', { 
+                    uniqueConfigs: uniqueConfigIds,
+                    count: uniqueConfigIds.length
+                });
+
+                for (const configId of uniqueConfigIds) {
+                    try {
+                        const actionConfig = await configLib.getConfig(configId);
+                        
+                        if (!actionConfig?.actions || !Array.isArray(actionConfig.actions)) {
+                            configLib.debugLog(`Config ${configId} has no valid actions array`, actionConfig, 'warning');
+                            continue;
+                        }
+                        
+                        actions.push(...actionConfig.actions);
+                        configLib.debugLog(`Added ${actionConfig.actions.length} actions from ${configId}`);
+                        
+                    } catch (error) {
+                        configLib.debugLog(`Skipping config ${configId} due to error`, error, 'warning');
+                        continue;
+                    }
+                }
+
+                if (actions.length === 0) {
+                    throw new Error('No valid actions found in any referenced configs');
+                }
+
+                currentConfig = { 
+                    actions: actions.sort((a, b) => (b.priority || 0) - (a.priority || 0))
+                };
+                
+                displayConfig(currentConfig);
+                applyBtn.disabled = false;
+                configLib.debugLog('Config loaded successfully!', {
+                    actionCount: currentConfig.actions.length,
+                    sampleAction: currentConfig.actions[0]
+                }, 'success');
+
+            } catch (error) {
+                configLib.debugLog('Config fetch failed', error, 'error');
+                applyBtn.disabled = true;
+                configPreview.style.display = 'none';
+            }
+        }
+
+        function displayConfig(config) {
+            configActions.innerHTML = '';
+            
+            config.actions.forEach((action, index) => {
+                const actionDiv = document.createElement('div');
+                actionDiv.className = 'config-item';
+                actionDiv.innerHTML = `
+                    <h4>Action ${index + 1}: ${action.type.toUpperCase()}</h4>
+                    <p><strong>Priority:</strong> ${action.priority || 0}</p>
+                    ${action.selector ? `<p><strong>Selector:</strong> <code>${action.selector}</code></p>` : ''}
+                    ${action.target ? `<p><strong>Target:</strong> <code>${action.target}</code></p>` : ''}
+                    <pre>${JSON.stringify(action, null, 2)}</pre>
+                    <hr>
+                `;
+                configActions.appendChild(actionDiv);
+            });
+            
+            configPreview.style.display = 'block';
+        }
+
+        async function applyConfig() {
+            if (!currentConfig?.actions) {
+                configLib.debugLog('No valid config to apply', null, 'error');
+                return;
+            }
+
+            try {
+                configLib.debugLog('Applying configuration...', {
+                    actionCount: currentConfig.actions.length
+                });
+
+                for (const action of currentConfig.actions) {
+                    try {
+                        configLib.debugLog(`Executing ${action.type} action`, action);
+                        
+                        switch (action.type) {
+                            case 'remove':
+                                document.querySelectorAll(action.selector).forEach(el => el.remove());
+                                break;
+                            case 'replace':
+                                document.querySelectorAll(action.selector).forEach(el => {
+                                    el.outerHTML = action.newElement || action.content;
+                                });
+                                break;
+                            case 'insert':
+                                const positionMap = {
+                                    'beforebegin': 'beforebegin',
+                                    'afterbegin': 'afterbegin',
+                                    'beforeend': 'beforeend',
+                                    'afterend': 'afterend'
+                                };
+                                const position = positionMap[action.position] || 'beforeend';
+                                document.querySelectorAll(action.target).forEach(target => {
+                                    target.insertAdjacentHTML(position, action.element || action.content);
+                                });
+                                break;
+                            case 'alter':
+                                document.body.innerHTML = document.body.innerHTML.replaceAll(
+                                    action.oldValue, 
+                                    action.newValue
+                                );
+                                break;
+                            default:
+                                configLib.debugLog(`Unknown action type: ${action.type}`, null, 'warning');
+                        }
+                    } catch (error) {
+                        configLib.debugLog(`Failed to execute ${action.type} action`, error, 'error');
+                    }
+                }
+
+                configLib.debugLog('Configuration applied successfully!', null, 'success');
+            } catch (error) {
+                configLib.debugLog('Error applying configuration', error, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
