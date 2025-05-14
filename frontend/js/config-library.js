@@ -1,21 +1,21 @@
 export default class ConfigLibrary {
     constructor(baseUrl = 'http://localhost:8080/api') {
         this.baseUrl = baseUrl;
+        this.specificUrl = 'http://localhost:8080/api/specific';
     }
 
-    // ----------- Configuration Endpoints --------------
     async getConfig(id) {
-        const response = await fetch(`${this.baseUrl}/configuration/${id}`);
+        const response = await fetch(`${this.baseUrl}/${id}`);
         return this._handleResponse(response);
     }
 
     async getAllConfigs() {
-        const response = await fetch(`${this.baseUrl}/configuration/all`);
+        const response = await fetch(`${this.baseUrl}/all`);
         return this._handleResponse(response);
     }
 
     async createConfig(config) {
-        const response = await fetch(`${this.baseUrl}/configuration`, {
+        const response = await fetch(`${this.baseUrl}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
@@ -23,8 +23,17 @@ export default class ConfigLibrary {
         return this._handleResponse(response);
     }
 
+    async createConfigFromYaml(yamlString) {
+        const response = await fetch(`${this.baseUrl}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-yaml' },
+            body: yamlString
+        });
+        return this._handleResponse(response);
+    }
+
     async updateConfig(id, config) {
-        const response = await fetch(`${this.baseUrl}/configuration/${id}`, {
+        const response = await fetch(`${this.baseUrl}/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
@@ -33,71 +42,23 @@ export default class ConfigLibrary {
     }
 
     async deleteConfig(id) {
-        const response = await fetch(`${this.baseUrl}/configuration/${id}`, {
+        const response = await fetch(`${this.baseUrl}/${id}`, {
             method: 'DELETE'
         });
         return this._handleResponse(response);
     }
 
-    // ----------- SpecificConfig Endpoints --------------
+    // ----------- Specific Config Endpoints --------------
     async getSpecificConfigByContext({ host, url, page }) {
         const params = new URLSearchParams();
         if (host) params.append('host', host);
         if (url) params.append('url', url);
         if (page) params.append('page', page);
         
-        const response = await fetch(`${this.baseUrl}/specific?${params}`);
+        const response = await fetch(`${this.specificUrl}/?${params}`);
         return this._handleResponse(response);
     }
 
-    async getSpecificConfigById(id) {
-        const response = await fetch(`${this.baseUrl}/specific/${id}`);
-        return this._handleResponse(response);
-    }
-
-    async getAllSpecificConfigs() {
-        const response = await fetch(`${this.baseUrl}/specific/all`);
-        return this._handleResponse(response);
-    }
-
-    async createSpecificConfig(config) {
-        const response = await fetch(`${this.baseUrl}/specific`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config)
-        });
-        return this._handleResponse(response);
-    }
-
-    async createSpecificConfigFromYaml(yamlString) {
-        const response = await fetch(`${this.baseUrl}/specific`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-yaml' },
-            body: yamlString
-        });
-        return this._handleResponse(response);
-    }
-
-    async getSpecificConfigYamlById(id) {
-        const response = await fetch(`${this.baseUrl}/specific/yaml/${id}`);
-        return response.text();
-    }
-
-    async updateSpecificConfig(id, config) {
-        const response = await fetch(`${this.baseUrl}/specific/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config)
-        });
-        return this._handleResponse(response);
-    }
-
-    async deleteSpecificConfig(id) {
-        const response = await fetch(`${this.baseUrl}/specific/${id}`, {
-            method: 'DELETE'
-        });
-        return this._handleResponse(response);
-    }
 
     // ----------- Helper Methods --------------
     async _handleResponse(response) {
@@ -110,7 +71,6 @@ export default class ConfigLibrary {
                         errorText = errorJson.message;
                     }
                 } catch (e) {
-                    // Not JSON, use as plain text
                 }
                 throw new Error(`Request failed: ${response.status} - ${errorText}`);
             }
@@ -136,7 +96,7 @@ export default class ConfigLibrary {
     // ----------- DOM Manipulation --------------
     async applyConfig(config) {
         if (typeof config === 'string') {
-            config = await this.getSpecificConfigById(config);
+            config = await this.getConfigById(config);
         } else if (config.host || config.url || config.page) {
             config = await this.getSpecificConfigByContext(config);
         }
