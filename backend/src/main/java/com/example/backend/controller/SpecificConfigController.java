@@ -2,6 +2,7 @@ package com.example.backend.controller;
 
 import com.example.backend.model.SpecificConfig;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
@@ -44,8 +45,10 @@ public class SpecificConfigController {
         return new ArrayList<>(configStore.values());
     }
 
-    @PostMapping
-    public String create(@RequestBody SpecificConfig config) {
+    @PostMapping(consumes = "application/json")
+    public String create(@RequestBody SpecificConfig config, HttpServletResponse response) {
+            // Add cache control headers
+        response.setHeader("Cache-Control", "no-store, must-revalidate");
         String id = UUID.randomUUID().toString();
         config.setId(id);
         configStore.put(id, config);
@@ -60,10 +63,14 @@ public class SpecificConfigController {
 
     @PostMapping(consumes = "application/x-yaml")
     public String createFromYaml(@RequestBody String yamlContent) {
+    try {
         SpecificConfig config = yaml.loadAs(yamlContent, SpecificConfig.class);
         config.setId(UUID.randomUUID().toString());
         configStore.put(config.getId(), config);
         return config.getId();
+    } catch (Exception e) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid YAML: " + e.getMessage());
+    }
     }
     
     private boolean matchesContext(SpecificConfig config, String host, String url, String page) {
